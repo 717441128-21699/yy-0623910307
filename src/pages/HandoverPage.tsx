@@ -24,8 +24,8 @@ import {
   ListTodo,
 } from 'lucide-react';
 import * as api from '@/mock/api';
-import type { HandoverRecord, RiskLevel, OpenClue, KeyHandoverItem } from '@/types';
-import { RISK_NAMES, STAGE_NAMES } from '@/types';
+import type { HandoverRecord, RiskLevel, OpenClue, KeyHandoverItem, HandoverClueSnapshot } from '@/types';
+import { RISK_NAMES, STAGE_NAMES, REASON_NAMES } from '@/types';
 import { cn } from '@/lib/utils';
 import StatCard from '@/components/StatCard';
 import { useClueStore } from '@/store/clueStore';
@@ -64,6 +64,10 @@ export default function HandoverPage() {
   // key: clueId, value: boolean
   const [keyItemChecked, setKeyItemChecked] = useState<Record<string, boolean>>({});
 
+  const [riskFilter, setRiskFilter] = useState<RiskLevel | 'all'>('all');
+  const [stageFilter, setStageFilter] = useState<string>('all');
+  const [bulkInstruction, setBulkInstruction] = useState('');
+
   useEffect(() => {
     fetchClues();
     const stored = loadHandoverHistory();
@@ -87,7 +91,19 @@ export default function HandoverPage() {
       const stage = hr?.stage || clue.currentStage || 'found';
       if (stage === 'closed') continue;
       let todoText = '';
-      if (hr && hr.timeline && hr.timeline.length > 0) {
+      // 优先使用最新风险研判信息
+      if (clue.adjustHistory && clue.adjustHistory.length > 0) {
+        const lastAdjust = clue.adjustHistory[clue.adjustHistory.length - 1];
+        const reasonName = REASON_NAMES[lastAdjust.reason] || lastAdjust.reason;
+        const levelName = RISK_NAMES[lastAdjust.toLevel];
+        if (lastAdjust.judgment) {
+          todoText = `【${levelName}·${reasonName}】${lastAdjust.judgment}`;
+        } else {
+          todoText = `风险等级调整为${levelName}，原因：${reasonName}。${lastAdjust.remark || '待重点跟进'}`;
+        }
+      }
+      // 其次用最近处置时间线
+      if (!todoText && hr && hr.timeline && hr.timeline.length > 0) {
         const lastEvt = hr.timeline[hr.timeline.length - 1];
         todoText = lastEvt.detail || lastEvt.title;
       }
@@ -135,6 +151,41 @@ export default function HandoverPage() {
     setKeyItemChecked(prev => ({ ...prev, [clueId]: !prev[clueId] }));
   };
 
+  const filteredUnclosedClues = useMemo(() => {
+    return unclosedClues.filter(c => {
+      if (riskFilter !== 'all' && c.riskLevel !== riskFilter) return false;
+      if (stageFilter !== 'all' && c.stage !== stageFilter) return false;
+      return true;
+    });
+  }, [unclosedClues, riskFilter, stageFilter]);
+
+  const checkedCount = Object.values(keyItemChecked).filter(Boolean).length;
+
+  const handleBulkSetInstruction = () => {
+    if (!bulkInstruction.trim()) return;
+    const updated: Record<string, string> = { ...keyItemInstructions };
+    for (const id of Object.keys(keyItemChecked)) {
+      if (keyItemChecked[id]) {
+        updated[id] = bulkInstruction.trim();
+      }
+    }
+    setKeyItemInstructions(updated);
+    setBulkInstruction('');
+  };
+
+  const handleSelectAllVisible = () => {
+    const updated = { ...keyItemChecked };
+    filteredUnclosedClues.forEach(c => {
+      updated[c.id] = true;
+    });
+    setKeyItemChecked(updated);
+  };
+
+  const handleClearAllChecked = () => {
+    setKeyItemChecked({});
+    setKeyItemInstructions({});
+  };
+
   const handleConfirmHandover = () => {
     if (!shiftStarter.trim() || !shiftEnder.trim()) {
       alert('请填写交班人和接班人签名');
@@ -149,6 +200,17 @@ export default function HandoverPage() {
         instruction: keyItemInstructions[c.id]?.trim() || '请接班同志重点跟进',
       }));
 
+    const clueToSnapshot = (c: any): HandoverClueSnapshot => ({
+      id: c.id,
+      keywords: c.keywords,
+      riskLevel: c.riskLevel,
+      title: c.title,
+    });
+
+    const newClues: HandoverClueSnapshot[] = clues.slice(0, 6).map(clueToSnapshot);
+    const escalatedClues: HandoverClueSnapshot[] = clues.filter(c => c.riskLevel === 'escalate').map(clueToSnapshot);
+    const closedClues: HandoverClueSnapshot[] = clues.filter(c => c.isClosed || c.currentStage === 'closed').map(clueToSnapshot);
+
     const newRecord: HandoverRecord = {
       id: 'H' + Date.now().toString().slice(-10),
       shiftStarter: shiftStarter.trim(),
@@ -160,6 +222,9 @@ export default function HandoverPage() {
       avgResponseTime: shiftStats.avgResponseTime,
       remark: remark.trim(),
       keyItems,
+      newClues,
+      escalatedClues,
+      closedClues,
     };
     const updatedHistory = [newRecord, ...history].slice(0, 20);
     saveHandoverHistory(updatedHistory);
@@ -253,7 +318,63 @@ export default function HandoverPage() {
               勾选"重点交办"可将该线索加入本次交接班的重点事项，并填写交办说明
             </p>
           </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={riskFilter}
+              onChange={e => setRiskFilter(e.target.value as any)}
+              className="px-3 py-1.5 text-xs rounded-lg border border-deepsea-200 bg-white text-deepsea-700 focus:outline-none focus:ring-2 focus:ring-[#1B9AAA]/30"
+            >
+              <option value="all">全部等级</option>
+              <option value="watch">关注</option>
+              <option value="warn">预警</option>
+              <option value="escalate">升级</option>
+            </select>
+            <select
+              value={stageFilter}
+              onChange={e => setStageFilter(e.target.value)}
+              className="px-3 py-1.5 text-xs rounded-lg border border-deepsea-200 bg-white text-deepsea-700 focus:outline-none focus:ring-2 focus:ring-[#1B9AAA]/30"
+            >
+              <option value="all">全部阶段</option>
+              {Object.entries(STAGE_NAMES).map(([key, name]) => (
+                <option key={key} value={key}>{name}</option>
+              ))}
+            </select>
+          </div>
         </div>
+
+        {checkedCount > 0 && (
+          <div className="px-6 py-3 bg-[#E9B44C]/[0.08] border-b border-[#E9B44C]/20 flex items-center gap-3 flex-wrap">
+            <Star size={14} className="text-[#E9B44C]" fill="currentColor" />
+            <span className="text-sm font-bold text-[#b8862d]">已选 {checkedCount} 条重点交办</span>
+            <div className="flex-1 flex items-center gap-2 min-w-[240px]">
+              <input
+                type="text"
+                value={bulkInstruction}
+                onChange={e => setBulkInstruction(e.target.value)}
+                placeholder="批量填写交办说明（将覆盖所选线索）..."
+                className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-[#E9B44C]/30 bg-white focus:outline-none focus:ring-2 focus:ring-[#E9B44C]/40"
+              />
+              <button
+                onClick={handleBulkSetInstruction}
+                className="px-3 py-1.5 text-xs font-bold bg-[#E9B44C] text-white rounded-lg hover:bg-[#d9a33c] transition-colors"
+              >
+                批量应用
+              </button>
+            </div>
+            <button
+              onClick={handleSelectAllVisible}
+              className="text-[11px] text-deepsea-600 hover:text-deepsea-800 underline"
+            >
+              全选当前筛选
+            </button>
+            <button
+              onClick={handleClearAllChecked}
+              className="text-[11px] text-slate-500 hover:text-slate-700 underline"
+            >
+              清空选择
+            </button>
+          </div>
+        )}
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -272,14 +393,14 @@ export default function HandoverPage() {
               </tr>
             </thead>
             <tbody>
-              {unclosedClues.length === 0 ? (
+              {filteredUnclosedClues.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="text-center py-12 text-deepsea-400">
-                    🎉 太棒了！当前没有未闭环的线索
+                    🔍 当前筛选条件下没有未闭环线索
                   </td>
                 </tr>
               ) : (
-                unclosedClues.map((clue, idx) => {
+                filteredUnclosedClues.map((clue, idx) => {
                   const isChecked = !!keyItemChecked[clue.id];
                   return (
                     <tr
@@ -582,7 +703,107 @@ export default function HandoverPage() {
                       </div>
 
                       {isExpanded && (
-                        <div className="mt-4 pt-4 border-t border-deepsea-100 space-y-3 animate-slide-up-in">
+                        <div className="mt-4 pt-4 border-t border-deepsea-100 space-y-4 animate-slide-up-in">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <div className="bg-deepsea-50/60 rounded-lg p-2.5 text-center">
+                              <div className="text-[10px] text-deepsea-500 mb-0.5">本班新增</div>
+                              <div className="font-mono font-bold text-deepsea-700 text-sm tabular-nums">
+                                {rec.newClues?.length ?? rec.foundCount}
+                              </div>
+                            </div>
+                            <div className="bg-[#D72638]/5 rounded-lg p-2.5 text-center">
+                              <div className="text-[10px] text-[#D72638] mb-0.5">升级线索</div>
+                              <div className="font-mono font-bold text-[#D72638] text-sm tabular-nums">
+                                {rec.escalatedClues?.length ?? rec.escalateCount}
+                              </div>
+                            </div>
+                            <div className="bg-emerald-500/8 rounded-lg p-2.5 text-center">
+                              <div className="text-[10px] text-emerald-600 mb-0.5">闭环完成</div>
+                              <div className="font-mono font-bold text-emerald-600 text-sm tabular-nums">
+                                {rec.closedClues?.length ?? rec.handledCount}
+                              </div>
+                            </div>
+                            <div className="bg-[#E9B44C]/15 rounded-lg p-2.5 text-center">
+                              <div className="text-[10px] text-[#b8862d] mb-0.5">重点交办</div>
+                              <div className="font-mono font-bold text-[#b8862d] text-sm tabular-nums">
+                                {rec.keyItems?.length ?? 0}
+                              </div>
+                            </div>
+                          </div>
+
+                          {(rec.newClues && rec.newClues.length > 0) && (
+                            <div>
+                              <div className="text-[11px] font-bold text-deepsea-700 mb-2 flex items-center gap-1.5">
+                                <span className="w-1.5 h-3 rounded-full bg-[#1B9AAA]" />
+                                本班新增线索
+                              </div>
+                              <div className="space-y-1.5">
+                                {rec.newClues.slice(0, 4).map(c => (
+                                  <Link
+                                    key={c.id}
+                                    to={`/clue/${c.id}`}
+                                    className="flex items-center gap-2 p-2 rounded-lg bg-white hover:bg-deepsea-50 transition-colors border border-deepsea-100/50 group"
+                                  >
+                                    <RiskBadge level={c.riskLevel} size="sm" />
+                                    <span className="flex-1 text-xs text-deepsea-700 truncate font-medium group-hover:text-deepsea-900">
+                                      {c.keywords.slice(0, 2).join(' · ')}
+                                    </span>
+                                    <ChevronRight size={12} className="text-deepsea-300 group-hover:text-deepsea-500 transition-colors" />
+                                  </Link>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {(rec.escalatedClues && rec.escalatedClues.length > 0) && (
+                            <div>
+                              <div className="text-[11px] font-bold text-[#D72638] mb-2 flex items-center gap-1.5">
+                                <span className="w-1.5 h-3 rounded-full bg-[#D72638]" />
+                                升级线索（需重点关注）
+                              </div>
+                              <div className="space-y-1.5">
+                                {rec.escalatedClues.map(c => (
+                                  <Link
+                                    key={c.id}
+                                    to={`/clue/${c.id}`}
+                                    className="flex items-center gap-2 p-2 rounded-lg bg-[#D72638]/[0.04] hover:bg-[#D72638]/[0.08] transition-colors border border-[#D72638]/10 group"
+                                  >
+                                    <AlertOctagon size={13} className="text-[#D72638] shrink-0" />
+                                    <span className="flex-1 text-xs text-deepsea-700 truncate font-medium group-hover:text-deepsea-900">
+                                      {c.keywords.slice(0, 2).join(' · ')}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 font-mono">{c.id}</span>
+                                    <ChevronRight size={12} className="text-deepsea-300 group-hover:text-deepsea-500 transition-colors" />
+                                  </Link>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {rec.closedClues && rec.closedClues.length > 0 && (
+                            <div>
+                              <div className="text-[11px] font-bold text-emerald-600 mb-2 flex items-center gap-1.5">
+                                <span className="w-1.5 h-3 rounded-full bg-emerald-500" />
+                                本班闭环
+                              </div>
+                              <div className="space-y-1.5">
+                                {rec.closedClues.slice(0, 3).map(c => (
+                                  <Link
+                                    key={c.id}
+                                    to={`/clue/${c.id}`}
+                                    className="flex items-center gap-2 p-2 rounded-lg bg-emerald-500/5 hover:bg-emerald-500/10 transition-colors border border-emerald-200/30 group"
+                                  >
+                                    <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+                                    <span className="flex-1 text-xs text-deepsea-700 truncate font-medium group-hover:text-deepsea-900">
+                                      {c.keywords.slice(0, 2).join(' · ')}
+                                    </span>
+                                    <ChevronRight size={12} className="text-deepsea-300 group-hover:text-deepsea-500 transition-colors" />
+                                  </Link>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
                           {rec.keyItems && rec.keyItems.length > 0 && (
                             <div>
                               <div className="text-[11px] font-bold text-[#b8862d] mb-2 flex items-center gap-1">
@@ -591,7 +812,11 @@ export default function HandoverPage() {
                               </div>
                               <div className="space-y-2">
                                 {rec.keyItems.map((item, iidx) => (
-                                  <div key={iidx} className="bg-[#E9B44C]/[0.06] border border-[#E9B44C]/15 rounded-lg p-3">
+                                  <Link
+                                    key={iidx}
+                                    to={`/clue/${item.clueId}`}
+                                    className="block bg-[#E9B44C]/[0.06] border border-[#E9B44C]/15 rounded-lg p-2.5 hover:bg-[#E9B44C]/[0.1] transition-colors group"
+                                  >
                                     <div className="flex items-center gap-2 flex-wrap mb-1.5">
                                       <RiskBadge level={item.riskLevel as RiskLevel} size="sm" />
                                       {item.keywords.slice(0, 3).map(k => (
@@ -601,15 +826,16 @@ export default function HandoverPage() {
                                       ))}
                                       <span className="text-[10px] text-slate-500 font-mono ml-auto">{item.clueId}</span>
                                     </div>
-                                    <p className="text-xs leading-relaxed text-deepsea-700 pl-5 relative">
+                                    <p className="text-xs leading-relaxed text-deepsea-700 pl-4 relative flex items-start gap-1">
                                       <span className="absolute left-0 top-0 text-[#E9B44C] font-bold">→</span>
                                       {item.instruction}
                                     </p>
-                                  </div>
+                                  </Link>
                                 ))}
                               </div>
                             </div>
                           )}
+
                           {rec.remark && (
                             <p className="text-[11px] leading-relaxed text-deepsea-600 bg-white/70 rounded-lg px-3 py-2 border border-deepsea-100/60">
                               💬 {rec.remark}

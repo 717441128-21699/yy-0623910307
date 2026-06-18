@@ -459,7 +459,128 @@ export default function HandleRecordPage() {
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-5">
+          <div className="bg-white rounded-2xl shadow-card p-6">
+            <h3 className="text-base font-bold text-deepsea-900 flex items-center gap-2 mb-5">
+              <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-deepsea-500 to-[#1B9AAA] text-white flex items-center justify-center">
+                <FileText size={15} />
+              </span>
+              对接进展汇总
+              <span className="text-[11px] font-normal text-deepsea-400 ml-1">按类别自动归类，快速掌握卡点</span>
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-slate-50/70 rounded-xl p-4 border border-slate-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <Building2 size={15} className="text-[#1B9AAA]" />
+                  <span className="text-sm font-bold text-deepsea-800">联系单位</span>
+                  <span className="ml-auto chip bg-white text-deepsea-600 border border-slate-200 text-[11px]">
+                    {record.contactUnits.length} 家
+                  </span>
+                </div>
+                {record.contactUnits.length === 0 ? (
+                  <p className="text-[11px] text-slate-400">暂无联系记录</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {record.contactUnits.map(u => (
+                      <li key={u.id} className="flex items-center gap-2 text-[12px]">
+                        <span className={cn('w-1.5 h-1.5 rounded-full shrink-0',
+                          u.status === 'replied' ? 'bg-emerald-500' :
+                          u.status === 'contacted' || u.status === 'pending_reply' ? 'bg-[#1B9AAA]' :
+                          u.status === 'escalated' || u.status === 'no_response' ? 'bg-[#D72638]' : 'bg-slate-400'
+                        )} />
+                        <span className="flex-1 truncate text-deepsea-700">{u.unitName}</span>
+                        <span className={cn('shrink-0 text-[10px] px-1.5 py-0.5 rounded', contactStatusColor[u.status])}>
+                          {CONTACT_STATUS_NAMES[u.status]}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {record.contactUnits.filter(u => u.status === 'pending' || u.status === 'pending_reply' || u.status === 'no_response').length > 0 && (
+                  <p className="mt-2.5 pt-2.5 border-t border-slate-200/70 text-[10px] text-[#FF6B35] font-medium flex items-center gap-1">
+                    <AlertTriangle size={10} />
+                    {record.contactUnits.filter(u => u.status === 'pending' || u.status === 'pending_reply' || u.status === 'no_response').length} 家待回复
+                  </p>
+                )}
+              </div>
+
+              <div className="bg-slate-50/70 rounded-xl p-4 border border-slate-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <Megaphone size={15} className="text-[#FF6B35]" />
+                  <span className="text-sm font-bold text-deepsea-800">回应发布</span>
+                  <span className="ml-auto chip bg-white text-deepsea-600 border border-slate-200 text-[11px]">
+                    {record.responses.length} 条
+                  </span>
+                </div>
+                {record.responses.length === 0 ? (
+                  <p className="text-[11px] text-slate-400">暂无回应记录</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {record.responses.map(r => (
+                      <li key={r.id} className="flex items-center gap-2 text-[12px]">
+                        <span className={cn('w-1.5 h-1.5 rounded-full shrink-0',
+                          r.auditStatus === 'published' ? 'bg-emerald-500' :
+                          r.auditStatus === 'approved' ? 'bg-[#1B9AAA]' :
+                          r.auditStatus === 'reviewing' || r.auditStatus === 'draft' ? 'bg-[#E9B44C]' : 'bg-[#D72638]'
+                        )} />
+                        <span className="flex-1 truncate text-deepsea-700">{r.content}</span>
+                        <span className={cn('shrink-0 text-[10px] px-1.5 py-0.5 rounded', auditStatusColor[r.auditStatus])}>
+                          {AUDIT_STATUS_NAMES[r.auditStatus]}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {record.responses.filter(r => r.auditStatus === 'draft' || r.auditStatus === 'reviewing' || r.auditStatus === 'rejected').length > 0 && (
+                  <p className="mt-2.5 pt-2.5 border-t border-slate-200/70 text-[10px] text-[#E9B44C] font-medium flex items-center gap-1">
+                    <Clock size={10} />
+                    {record.responses.filter(r => r.auditStatus === 'draft' || r.auditStatus === 'reviewing' || r.auditStatus === 'rejected').length} 条待发布
+                  </p>
+                )}
+              </div>
+
+              <div className="bg-slate-50/70 rounded-xl p-4 border border-slate-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <ClipboardCheck size={15} className="text-[#b8862d]" />
+                  <span className="text-sm font-bold text-deepsea-800">核验事项</span>
+                  <span className="ml-auto chip bg-white text-deepsea-600 border border-slate-200 text-[11px]">
+                    {record.verifyItems.length} 项
+                  </span>
+                </div>
+                {record.verifyItems.length === 0 ? (
+                  <p className="text-[11px] text-slate-400">暂无待核实事项</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {record.verifyItems.map(v => (
+                      <li key={v.id} className="text-[12px]">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className={cn('w-1.5 h-1.5 rounded-full shrink-0',
+                            v.progress >= 100 ? 'bg-emerald-500' :
+                            v.progress >= 50 ? 'bg-[#1B9AAA]' :
+                            v.priority === 'high' || v.priority === 'urgent' ? 'bg-[#D72638]' : 'bg-slate-400'
+                          )} />
+                          <span className="flex-1 truncate text-deepsea-700">{v.description}</span>
+                        </div>
+                        <div className="pl-3.5 flex items-center gap-2">
+                          <div className="flex-1 h-1 rounded-full bg-slate-200 overflow-hidden">
+                            <div className={cn('h-full rounded-full', progressBarColor[v.priority])} style={{ width: `${v.progress}%` }} />
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-mono w-7 text-right">{v.progress}%</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {record.verifyItems.filter(v => v.progress < 100 && (v.priority === 'high' || v.priority === 'urgent')).length > 0 && (
+                  <p className="mt-2.5 pt-2.5 border-t border-slate-200/70 text-[10px] text-[#D72638] font-medium flex items-center gap-1">
+                    <AlertOctagon size={10} />
+                    {record.verifyItems.filter(v => v.progress < 100 && (v.priority === 'high' || v.priority === 'urgent')).length} 项高优未完成
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
           <Timeline events={record.timeline} title="处置时间线" />
         </div>
         <div className="bg-white rounded-2xl shadow-card p-6 space-y-4">

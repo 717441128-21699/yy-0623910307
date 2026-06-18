@@ -184,6 +184,13 @@ export const PRIORITY_NAMES: Record<VerifyItem['priority'], string> = {
   urgent: '紧急',
 };
 
+export interface HandoverClueSnapshot {
+  id: string;
+  keywords: string[];
+  riskLevel: RiskLevel;
+  title: string;
+}
+
 export interface KeyHandoverItem {
   clueId: string;
   keywords: string[];
@@ -202,6 +209,9 @@ export interface HandoverRecord {
   avgResponseTime: number;
   remark: string;
   keyItems?: KeyHandoverItem[];
+  newClues?: HandoverClueSnapshot[];
+  escalatedClues?: HandoverClueSnapshot[];
+  closedClues?: HandoverClueSnapshot[];
   shiftName?: string;
   outgoingOperator?: string;
   incomingOperator?: string;
