@@ -16,6 +16,7 @@ import {
   Clock,
   User,
   CheckCircle2,
+  FileText,
 } from 'lucide-react';
 import { useClueStore } from '@/store/clueStore';
 import RiskBadge from '@/components/RiskBadge';
@@ -35,6 +36,7 @@ export default function ClueDetailPage() {
   const [targetLevel, setTargetLevel] = useState<RiskLevel | ''>('');
   const [reason, setReason] = useState('');
   const [remark, setRemark] = useState('');
+  const [judgment, setJudgment] = useState('');
   const [adjustSuccess, setAdjustSuccess] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -66,8 +68,9 @@ export default function ClueDetailPage() {
       alert('请选择调整目标等级和原因');
       return;
     }
-    adjustRiskLevel(clue.id, targetLevel, reason, remark);
+    adjustRiskLevel(clue.id, targetLevel, reason, remark, judgment || undefined);
     setRemark('');
+    setJudgment('');
     setReason('');
     setAdjustSuccess(true);
     setRefreshKey(k => k + 1);
@@ -218,14 +221,29 @@ export default function ClueDetailPage() {
                   ))}
                 </select>
               </div>
+              <div className="mb-3">
+                <label className="block text-xs font-semibold text-deepsea-700 mb-1.5">
+                  <span className="inline-flex items-center gap-1">
+                    <FileText size={12} />
+                    研判意见
+                  </span>
+                </label>
+                <textarea
+                  value={judgment}
+                  onChange={e => setJudgment(e.target.value)}
+                  rows={3}
+                  placeholder="填写本次风险研判的核心依据、传播态势判断、可能的影响范围等值班复核意见..."
+                  className="w-full px-3 py-2.5 rounded-xl border border-deepsea-100 text-sm text-deepsea-800 placeholder:text-deepsea-300 focus:outline-none focus:ring-4 focus:ring-deepsea-100 focus:border-deepsea-300 resize-none bg-white"
+                />
+              </div>
               <div className="mb-4">
-                <label className="block text-xs font-semibold text-deepsea-700 mb-1.5">备注</label>
+                <label className="block text-xs font-semibold text-deepsea-700 mb-1.5">补充备注</label>
                 <textarea
                   value={remark}
                   onChange={e => setRemark(e.target.value)}
                   rows={2}
                   placeholder="可填写补充说明..."
-                  className="w-full px-3 py-2.5 rounded-xl border border-deepsea-100 text-sm text-deepsea-800 placeholder:text-deepsea-300 focus:outline-none focus:ring-4 focus:ring-deepsea-100 focus:border-deepsea-300 resize-none"
+                  className="w-full px-3 py-2.5 rounded-xl border border-deepsea-100 text-sm text-deepsea-800 placeholder:text-deepsea-300 focus:outline-none focus:ring-4 focus:ring-deepsea-100 focus:border-deepsea-300 resize-none bg-white"
                 />
               </div>
               <button
@@ -308,6 +326,7 @@ export default function ClueDetailPage() {
                   <th className="text-left px-6 py-3 font-semibold">调整前</th>
                   <th className="text-left px-6 py-3 font-semibold">调整后</th>
                   <th className="text-left px-6 py-3 font-semibold">调整原因</th>
+                  <th className="text-left px-6 py-3 font-semibold">研判意见</th>
                   <th className="text-left px-6 py-3 font-semibold">备注</th>
                   <th className="text-left px-6 py-3 font-semibold">操作人</th>
                 </tr>
@@ -315,12 +334,13 @@ export default function ClueDetailPage() {
               <tbody>
                 {clue.adjustHistory.map(r => (
                   <tr key={r.id} className="border-t border-deepsea-50 hover:bg-deepsea-50/30 transition-colors">
-                    <td className="px-6 py-3.5 text-slate-600 font-mono text-xs">{r.time}</td>
+                    <td className="px-6 py-3.5 text-slate-600 font-mono text-xs whitespace-nowrap">{r.time}</td>
                     <td className="px-6 py-3.5"><RiskBadge level={r.fromLevel} size="sm" showIcon={false} /></td>
                     <td className="px-6 py-3.5"><RiskBadge level={r.toLevel} size="sm" showIcon={false} /></td>
                     <td className="px-6 py-3.5 text-deepsea-700 font-medium">{REASON_NAMES[r.reason] || r.reason}</td>
-                    <td className="px-6 py-3.5 text-slate-600 max-w-[240px] truncate">{r.remark || '-'}</td>
-                    <td className="px-6 py-3.5 text-deepsea-700">{r.operator}</td>
+                    <td className="px-6 py-3.5 text-slate-700 text-xs leading-relaxed max-w-[260px]">{r.judgment || '-'}</td>
+                    <td className="px-6 py-3.5 text-slate-600 max-w-[200px] truncate text-xs">{r.remark || '-'}</td>
+                    <td className="px-6 py-3.5 text-deepsea-700 whitespace-nowrap">{r.operator}</td>
                   </tr>
                 ))}
               </tbody>

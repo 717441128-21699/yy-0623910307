@@ -102,6 +102,7 @@ export interface RiskAdjustRecord {
   toLevel: RiskLevel;
   reason: string;
   remark: string;
+  judgment?: string;
   operator: string;
   time?: string;
   operateTime?: string;
@@ -183,6 +184,13 @@ export const PRIORITY_NAMES: Record<VerifyItem['priority'], string> = {
   urgent: '紧急',
 };
 
+export interface KeyHandoverItem {
+  clueId: string;
+  keywords: string[];
+  riskLevel: RiskLevel;
+  instruction: string;
+}
+
 export interface HandoverRecord {
   id: string;
   shiftStarter: string;
@@ -193,6 +201,7 @@ export interface HandoverRecord {
   escalateCount: number;
   avgResponseTime: number;
   remark: string;
+  keyItems?: KeyHandoverItem[];
   shiftName?: string;
   outgoingOperator?: string;
   incomingOperator?: string;

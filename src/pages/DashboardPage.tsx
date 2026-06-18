@@ -29,7 +29,7 @@ const riskFilters: { key: 'all' | RiskLevel; label: string }[] = [
   { key: 'all', label: '全部' },
   { key: 'watch', label: '关注' },
   { key: 'warn', label: '预警' },
-  { key: 'escalate', label: '加急' },
+  { key: 'escalate', label: '升级' },
 ];
 
 const timeFilters: { key: '1h' | '6h' | '24h'; label: string }[] = [

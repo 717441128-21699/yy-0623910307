@@ -17,14 +17,20 @@ import {
   PenLine,
   Save,
   History,
+  ChevronDown,
+  ChevronUp,
+  Star,
+  User as UserIcon,
+  ListTodo,
 } from 'lucide-react';
 import * as api from '@/mock/api';
-import type { HandoverRecord, RiskLevel } from '@/types';
-import { RISK_NAMES, STAGE_NAMES, type OpenClue } from '@/types';
+import type { HandoverRecord, RiskLevel, OpenClue, KeyHandoverItem } from '@/types';
+import { RISK_NAMES, STAGE_NAMES } from '@/types';
 import { cn } from '@/lib/utils';
 import StatCard from '@/components/StatCard';
 import { useClueStore } from '@/store/clueStore';
 import { useHandleStore } from '@/store/handleStore';
+import RiskBadge from '@/components/RiskBadge';
 
 const HANDOVER_STORAGE_KEY = 'psy-handover-records';
 
@@ -51,6 +57,12 @@ export default function HandoverPage() {
   const [remark, setRemark] = useState('');
   const [nowTime, setNowTime] = useState(new Date());
   const [confirmSuccess, setConfirmSuccess] = useState(false);
+  const [expandedRecord, setExpandedRecord] = useState<string | null>(null);
+
+  // key: clueId, value: instruction text
+  const [keyItemInstructions, setKeyItemInstructions] = useState<Record<string, string>>({});
+  // key: clueId, value: boolean
+  const [keyItemChecked, setKeyItemChecked] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetchClues();
@@ -74,6 +86,14 @@ export default function HandoverPage() {
       const hr = handleRecords[clue.id];
       const stage = hr?.stage || clue.currentStage || 'found';
       if (stage === 'closed') continue;
+      let todoText = '';
+      if (hr && hr.timeline && hr.timeline.length > 0) {
+        const lastEvt = hr.timeline[hr.timeline.length - 1];
+        todoText = lastEvt.detail || lastEvt.title;
+      }
+      if (!todoText) {
+        todoText = hr ? `处置阶段：${STAGE_NAMES[stage as any] || stage}，待继续推进` : '尚未启动处置流程';
+      }
       result.push({
         id: clue.id,
         riskLevel: clue.riskLevel,
@@ -81,7 +101,7 @@ export default function HandoverPage() {
         foundAt: clue.publishedAt,
         timeAgo: clue.timeAgo,
         stage: stage as any,
-        todo: hr ? `处置阶段：${STAGE_NAMES[stage as any] || stage}，待继续推进` : '尚未启动处置流程',
+        todo: todoText,
       });
     }
     return result;
@@ -111,11 +131,24 @@ export default function HandoverPage() {
     escalate: 'bg-[#D72638]/10 text-[#D72638] border-[#D72638]/20',
   };
 
+  const toggleKeyItem = (clueId: string) => {
+    setKeyItemChecked(prev => ({ ...prev, [clueId]: !prev[clueId] }));
+  };
+
   const handleConfirmHandover = () => {
     if (!shiftStarter.trim() || !shiftEnder.trim()) {
       alert('请填写交班人和接班人签名');
       return;
     }
+    const keyItems: KeyHandoverItem[] = unclosedClues
+      .filter(c => keyItemChecked[c.id])
+      .map(c => ({
+        clueId: c.id,
+        keywords: c.keywords,
+        riskLevel: c.riskLevel,
+        instruction: keyItemInstructions[c.id]?.trim() || '请接班同志重点跟进',
+      }));
+
     const newRecord: HandoverRecord = {
       id: 'H' + Date.now().toString().slice(-10),
       shiftStarter: shiftStarter.trim(),
@@ -126,6 +159,7 @@ export default function HandoverPage() {
       escalateCount: shiftStats.escalateCount,
       avgResponseTime: shiftStats.avgResponseTime,
       remark: remark.trim(),
+      keyItems,
     };
     const updatedHistory = [newRecord, ...history].slice(0, 20);
     saveHandoverHistory(updatedHistory);
@@ -133,6 +167,8 @@ export default function HandoverPage() {
     setShiftStarter('');
     setShiftEnder('');
     setRemark('');
+    setKeyItemChecked({});
+    setKeyItemInstructions({});
     setConfirmSuccess(true);
     setTimeout(() => setConfirmSuccess(false), 2500);
   };
@@ -214,7 +250,7 @@ export default function HandoverPage() {
               </span>
             </h2>
             <p className="text-xs text-deepsea-500 mt-1 ml-7">
-              请接班同志重点跟进以下未处置完成的线索
+              勾选"重点交办"可将该线索加入本次交接班的重点事项，并填写交办说明
             </p>
           </div>
         </div>
@@ -223,88 +259,145 @@ export default function HandoverPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-deepsea-50/70 text-deepsea-700">
-                <th className="text-left font-semibold px-6 py-3 w-1.5"></th>
-                <th className="text-left font-semibold px-3 py-3">风险</th>
-                <th className="text-left font-semibold px-3 py-3">关键词</th>
-                <th className="text-left font-semibold px-3 py-3">首次发现</th>
-                <th className="text-left font-semibold px-3 py-3">当前阶段</th>
-                <th className="text-left font-semibold px-3 py-3">待办事项</th>
-                <th className="text-right font-semibold px-6 py-3">操作</th>
+                <th className="text-center px-3 py-3 font-semibold w-16">
+                  <Star size={16} className="mx-auto text-[#E9B44C]" />
+                </th>
+                <th className="text-left px-3 py-3 font-semibold w-1.5"></th>
+                <th className="text-left px-3 py-3 font-semibold">风险</th>
+                <th className="text-left px-3 py-3 font-semibold">关键词</th>
+                <th className="text-left px-3 py-3 font-semibold">首次发现</th>
+                <th className="text-left px-3 py-3 font-semibold">当前阶段</th>
+                <th className="text-left px-3 py-3 font-semibold">待办摘要</th>
+                <th className="text-right px-6 py-3 font-semibold">操作</th>
               </tr>
             </thead>
             <tbody>
               {unclosedClues.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-deepsea-400">
+                  <td colSpan={8} className="text-center py-12 text-deepsea-400">
                     🎉 太棒了！当前没有未闭环的线索
                   </td>
                 </tr>
               ) : (
-                unclosedClues.map((clue, idx) => (
-                  <tr
-                    key={clue.id}
-                    className={cn(
-                      'border-t border-deepsea-50 transition-colors group cursor-pointer hover:bg-deepsea-50/40',
-                      idx % 2 === 1 ? 'bg-slate-50/50' : '',
-                      clue.riskLevel === 'escalate' ? 'bg-[#D72638]/[0.04]' : ''
-                    )}
-                    onClick={() => navigate(`/clue/${clue.id}`)}
-                  >
-                    <td className="w-1.5 px-0 py-0">
-                      <div className={cn('w-1 h-full min-h-[72px]', riskColorBar[clue.riskLevel])} />
-                    </td>
-                    <td className="px-3 py-4">
-                      <span className={cn(
-                        'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-semibold',
-                        riskBadgeClass[clue.riskLevel]
-                      )}>
-                        {clue.riskLevel === 'escalate' && <AlertOctagon size={11} />}
-                        {clue.riskLevel === 'warn' && <AlertTriangle size={11} />}
-                        {clue.riskLevel === 'watch' && <Eye size={11} />}
-                        {RISK_NAMES[clue.riskLevel]}
-                      </span>
-                    </td>
-                    <td className="px-3 py-4 min-w-[200px]">
-                      <div className="flex flex-wrap gap-1.5">
-                        {clue.keywords.map(k => (
-                          <span
-                            key={k}
-                            className="chip bg-deepsea-50 text-deepsea-700 border border-deepsea-100 text-xs"
-                          >
-                            {k}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-3 py-4 text-deepsea-700 whitespace-nowrap">
-                      <div className="font-medium">{clue.timeAgo}</div>
-                      <div className="text-[11px] text-deepsea-400 mt-0.5">
-                        {new Date(clue.foundAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}
-                      </div>
-                    </td>
-                    <td className="px-3 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-deepsea-100/60 text-deepsea-800 text-xs font-semibold">
-                        {STAGE_NAMES[clue.stage] || clue.stage}
-                      </span>
-                    </td>
-                    <td className="px-3 py-4 text-deepsea-700 max-w-[320px]">
-                      <p className="line-clamp-2 text-xs leading-relaxed">{clue.todo}</p>
-                    </td>
-                    <td className="px-6 py-4 text-right whitespace-nowrap">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); navigate(`/clue/${clue.id}`); }}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-deepsea-600 hover:text-deepsea-900 hover:bg-deepsea-50 transition group-hover:bg-deepsea-100/70"
-                      >
-                        查看详情
-                        <ChevronRight size={13} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                unclosedClues.map((clue, idx) => {
+                  const isChecked = !!keyItemChecked[clue.id];
+                  return (
+                    <tr
+                      key={clue.id}
+                      className={cn(
+                        'border-t border-deepsea-50 transition-colors',
+                        idx % 2 === 1 ? 'bg-slate-50/50' : '',
+                        clue.riskLevel === 'escalate' ? 'bg-[#D72638]/[0.04]' : '',
+                        isChecked && 'bg-[#E9B44C]/[0.08]'
+                      )}
+                    >
+                      <td className="text-center px-3 py-4">
+                        <button
+                          onClick={() => toggleKeyItem(clue.id)}
+                          className={cn(
+                            'inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all',
+                            isChecked
+                              ? 'bg-[#E9B44C] text-white shadow-md scale-110'
+                              : 'bg-deepsea-50 text-deepsea-300 hover:bg-[#E9B44C]/20 hover:text-[#E9B44C]'
+                          )}
+                        >
+                          <Star size={15} fill={isChecked ? 'currentColor' : 'none'} />
+                        </button>
+                      </td>
+                      <td className="w-1.5 px-0 py-0">
+                        <div className={cn('w-1 h-full min-h-[72px]', riskColorBar[clue.riskLevel])} />
+                      </td>
+                      <td className="px-3 py-4">
+                        <RiskBadge level={clue.riskLevel} size="sm" />
+                      </td>
+                      <td className="px-3 py-4 min-w-[200px]">
+                        <div className="flex flex-wrap gap-1.5">
+                          {clue.keywords.map(k => (
+                            <span
+                              key={k}
+                              className="chip bg-deepsea-50 text-deepsea-700 border border-deepsea-100 text-xs"
+                            >
+                              {k}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-3 py-4 text-deepsea-700 whitespace-nowrap">
+                        <div className="font-medium">{clue.timeAgo}</div>
+                        <div className="text-[11px] text-deepsea-400 mt-0.5">
+                          {new Date(clue.foundAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}
+                        </div>
+                      </td>
+                      <td className="px-3 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-deepsea-100/60 text-deepsea-800 text-xs font-semibold">
+                          {STAGE_NAMES[clue.stage] || clue.stage}
+                        </span>
+                      </td>
+                      <td className="px-3 py-4 text-deepsea-700 max-w-[340px]">
+                        <div className="flex items-start gap-1.5">
+                          <ListTodo size={13} className="text-deepsea-400 mt-0.5 shrink-0" />
+                          <p className="line-clamp-2 text-xs leading-relaxed">{clue.todo}</p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                        <button
+                          onClick={() => navigate(`/clue/${clue.id}`)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-deepsea-600 hover:text-deepsea-900 hover:bg-deepsea-50 transition"
+                        >
+                          查看详情
+                          <ChevronRight size={13} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
+
+        {unclosedClues.some(c => keyItemChecked[c.id]) && (
+          <div className="bg-gradient-to-br from-[#E9B44C]/[0.08] via-white to-transparent border-t border-[#E9B44C]/20 px-6 py-5 animate-slide-up-in">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#E9B44C] to-[#b8862d] flex items-center justify-center shrink-0">
+                <Star size={18} className="text-white" fill="white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-deepsea-900 flex items-center gap-2">
+                  重点交办区
+                  <span className="chip bg-[#E9B44C]/15 text-[#b8862d] border border-[#E9B44C]/25">
+                    {unclosedClues.filter(c => keyItemChecked[c.id]).length} 条重点事项
+                  </span>
+                </h3>
+                <p className="text-xs text-deepsea-500 mt-1">请为每条重点事项填写交办说明，接班同志将优先跟进</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {unclosedClues
+                .filter(c => keyItemChecked[c.id])
+                .map(c => (
+                  <div key={c.id} className="bg-white rounded-xl p-4 border border-[#E9B44C]/20 shadow-sm">
+                    <div className="flex items-center gap-2 flex-wrap mb-2.5">
+                      <RiskBadge level={c.riskLevel} size="sm" />
+                      {c.keywords.slice(0, 3).map(k => (
+                        <span key={k} className="chip bg-deepsea-50 text-deepsea-700 border border-deepsea-100 text-xs">
+                          #{k}
+                        </span>
+                      ))}
+                      <span className="text-xs text-slate-500 font-mono ml-auto">{c.id}</span>
+                    </div>
+                    <input
+                      type="text"
+                      value={keyItemInstructions[c.id] || ''}
+                      onChange={e => setKeyItemInstructions(prev => ({ ...prev, [c.id]: e.target.value }))}
+                      placeholder="请填写交办说明：如 请接班同志第一时间联系街道办核实，关注微信传播态势..."
+                      className="w-full px-3.5 py-2.5 rounded-lg border border-deepsea-100 bg-deepsea-50/40 text-sm text-deepsea-900 placeholder:text-deepsea-300 focus:outline-none focus:ring-4 focus:ring-[#E9B44C]/20 focus:border-[#E9B44C]/40 focus:bg-white transition-all"
+                    />
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-5 gap-5">
@@ -362,7 +455,7 @@ export default function HandoverPage() {
             <textarea
               value={remark}
               onChange={e => setRemark(e.target.value)}
-              rows={4}
+              rows={3}
               placeholder="请填写本班次重要事项说明、未完成工作跟进提示、下一班注意事项等..."
               className="w-full px-4 py-3 rounded-xl border border-deepsea-100 bg-deepsea-50/40 text-sm text-deepsea-900 placeholder:text-deepsea-400 focus:outline-none focus:ring-4 focus:ring-deepsea-100 focus:border-deepsea-300 focus:bg-white transition-all resize-none leading-relaxed"
             />
@@ -371,7 +464,7 @@ export default function HandoverPage() {
           <button
             onClick={handleConfirmHandover}
             className={cn(
-              'w-full sm:w-auto sm:min-w-[220px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold shadow-lg transition-all',
+              'w-full sm:w-auto sm:min-w-[260px] inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-sm font-bold shadow-lg transition-all',
               confirmSuccess
                 ? 'bg-emerald-500 text-white shadow-emerald-500/25'
                 : 'bg-gradient-to-br from-deepsea-600 via-deepsea-700 to-deepsea-800 text-white shadow-deepsea-700/20 hover:shadow-xl hover:shadow-deepsea-700/30 hover:-translate-y-0.5 active:translate-y-0'
@@ -379,13 +472,18 @@ export default function HandoverPage() {
           >
             {confirmSuccess ? (
               <>
-                <CheckCircle2 size={16} />
+                <CheckCircle2 size={17} />
                 交接班确认成功
               </>
             ) : (
               <>
-                <Save size={16} />
+                <Save size={17} />
                 确认交接班
+                {Object.keys(keyItemChecked).filter(k => keyItemChecked[k]).length > 0 && (
+                  <span className="chip bg-white/15 text-white border-white/20 ml-1">
+                    {Object.keys(keyItemChecked).filter(k => keyItemChecked[k]).length} 条重点交办
+                  </span>
+                )}
               </>
             )}
           </button>
@@ -407,75 +505,121 @@ export default function HandoverPage() {
                   暂无历史记录
                 </div>
               ) : (
-                history.slice(0, 3).map((rec, idx) => (
-                  <div
-                    key={rec.id}
-                    className={cn(
-                      'relative rounded-xl p-4 transition-all',
-                      idx === 0
-                        ? 'bg-gradient-to-br from-[#1B9AAA]/[0.08] to-transparent border border-[#1B9AAA]/20'
-                        : 'bg-deepsea-50/40 border border-deepsea-100/60 hover:bg-deepsea-50/70'
-                    )}
-                  >
-                    {idx === 0 && (
-                      <span className="absolute -top-2 -right-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#1B9AAA] text-white shadow-md">
-                        最新
-                      </span>
-                    )}
-                    <div className="flex items-center justify-between mb-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-deepsea-100 to-deepsea-200 flex items-center justify-center">
-                          <Calendar size={14} className="text-deepsea-600" />
+                history.slice(0, 3).map((rec, idx) => {
+                  const isExpanded = expandedRecord === rec.id;
+                  return (
+                    <div
+                      key={rec.id}
+                      className={cn(
+                        'relative rounded-xl p-4 transition-all',
+                        idx === 0
+                          ? 'bg-gradient-to-br from-[#1B9AAA]/[0.08] to-transparent border border-[#1B9AAA]/20'
+                          : 'bg-deepsea-50/40 border border-deepsea-100/60 hover:bg-deepsea-50/70'
+                      )}
+                    >
+                      {idx === 0 && (
+                        <span className="absolute -top-2 -right-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#1B9AAA] text-white shadow-md">
+                          最新
+                        </span>
+                      )}
+                      <div
+                        className="flex items-center justify-between cursor-pointer"
+                        onClick={() => setExpandedRecord(isExpanded ? null : rec.id)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-deepsea-100 to-deepsea-200 flex items-center justify-center">
+                            <Calendar size={14} className="text-deepsea-600" />
+                          </div>
+                          <div>
+                            <div className="text-xs text-deepsea-500">交接编号</div>
+                            <div className="font-mono text-sm font-bold text-deepsea-800 tabular-nums">{rec.id}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-xs text-deepsea-500">交接编号</div>
-                          <div className="font-mono text-sm font-bold text-deepsea-800 tabular-nums">{rec.id}</div>
+                        <div className="flex items-center gap-2">
+                          {rec.keyItems && rec.keyItems.length > 0 && (
+                            <span className="chip bg-[#E9B44C]/15 text-[#b8862d] border border-[#E9B44C]/25">
+                              <Star size={11} fill="currentColor" className="mr-0.5" />
+                              {rec.keyItems.length} 项交办
+                            </span>
+                          )}
+                          <div className="text-right mr-1">
+                            <div className="text-[11px] text-deepsea-400">交接时间</div>
+                            <div className="text-xs font-semibold text-deepsea-700 whitespace-nowrap">{rec.handedAt}</div>
+                          </div>
+                          {isExpanded ? <ChevronUp size={16} className="text-deepsea-400" /> : <ChevronDown size={16} className="text-deepsea-400" />}
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-[11px] text-deepsea-400">交接时间</div>
-                        <div className="text-xs font-semibold text-deepsea-700 whitespace-nowrap">{rec.handedAt}</div>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-2 text-xs text-deepsea-700 mb-3 px-1">
-                      <span className="inline-flex items-center gap-1 font-semibold text-deepsea-800">
-                        <UserIcon letter={rec.shiftStarter[0] ?? '?'} />
-                        {rec.shiftStarter}
-                      </span>
-                      <ChevronRight size={13} className="text-deepsea-400" />
-                      <span className="inline-flex items-center gap-1 font-semibold text-deepsea-800">
-                        <UserIcon letter={rec.shiftEnder[0] ?? '?'} />
-                        {rec.shiftEnder}
-                      </span>
-                    </div>
+                      <div className="flex items-center gap-2 text-xs text-deepsea-700 my-3 px-1">
+                        <span className="inline-flex items-center gap-1 font-semibold text-deepsea-800">
+                          <AvatarLetter letter={rec.shiftStarter[0] ?? '?'} />
+                          {rec.shiftStarter}
+                        </span>
+                        <ChevronRight size={13} className="text-deepsea-400" />
+                        <span className="inline-flex items-center gap-1 font-semibold text-deepsea-800">
+                          <AvatarLetter letter={rec.shiftEnder[0] ?? '?'} />
+                          {rec.shiftEnder}
+                        </span>
+                      </div>
 
-                    <div className="grid grid-cols-4 gap-2 text-center">
-                      <div className="bg-white/80 rounded-lg py-2 px-1">
-                        <div className="text-[10px] text-deepsea-400">发现</div>
-                        <div className="font-mono font-bold text-deepsea-800 text-sm tabular-nums">{rec.foundCount}</div>
+                      <div className="grid grid-cols-4 gap-2 text-center">
+                        <div className="bg-white/80 rounded-lg py-2 px-1">
+                          <div className="text-[10px] text-deepsea-400">发现</div>
+                          <div className="font-mono font-bold text-deepsea-800 text-sm tabular-nums">{rec.foundCount}</div>
+                        </div>
+                        <div className="bg-white/80 rounded-lg py-2 px-1">
+                          <div className="text-[10px] text-deepsea-400">处置</div>
+                          <div className="font-mono font-bold text-emerald-600 text-sm tabular-nums">{rec.handledCount}</div>
+                        </div>
+                        <div className="bg-white/80 rounded-lg py-2 px-1">
+                          <div className="text-[10px] text-deepsea-400">升级</div>
+                          <div className="font-mono font-bold text-[#D72638] text-sm tabular-nums">{rec.escalateCount}</div>
+                        </div>
+                        <div className="bg-white/80 rounded-lg py-2 px-1">
+                          <div className="text-[10px] text-deepsea-400">响应</div>
+                          <div className="font-mono font-bold text-[#b8862d] text-sm tabular-nums">{rec.avgResponseTime}m</div>
+                        </div>
                       </div>
-                      <div className="bg-white/80 rounded-lg py-2 px-1">
-                        <div className="text-[10px] text-deepsea-400">处置</div>
-                        <div className="font-mono font-bold text-emerald-600 text-sm tabular-nums">{rec.handledCount}</div>
-                      </div>
-                      <div className="bg-white/80 rounded-lg py-2 px-1">
-                        <div className="text-[10px] text-deepsea-400">升级</div>
-                        <div className="font-mono font-bold text-[#D72638] text-sm tabular-nums">{rec.escalateCount}</div>
-                      </div>
-                      <div className="bg-white/80 rounded-lg py-2 px-1">
-                        <div className="text-[10px] text-deepsea-400">响应</div>
-                        <div className="font-mono font-bold text-[#b8862d] text-sm tabular-nums">{rec.avgResponseTime}m</div>
-                      </div>
-                    </div>
 
-                    {rec.remark && (
-                      <p className="mt-3 text-[11px] leading-relaxed text-deepsea-600 bg-white/70 rounded-lg px-3 py-2 border border-deepsea-100/60">
-                        💬 {rec.remark}
-                      </p>
-                    )}
-                  </div>
-                ))
+                      {isExpanded && (
+                        <div className="mt-4 pt-4 border-t border-deepsea-100 space-y-3 animate-slide-up-in">
+                          {rec.keyItems && rec.keyItems.length > 0 && (
+                            <div>
+                              <div className="text-[11px] font-bold text-[#b8862d] mb-2 flex items-center gap-1">
+                                <Star size={12} fill="currentColor" />
+                                重点交办事项（{rec.keyItems.length}）
+                              </div>
+                              <div className="space-y-2">
+                                {rec.keyItems.map((item, iidx) => (
+                                  <div key={iidx} className="bg-[#E9B44C]/[0.06] border border-[#E9B44C]/15 rounded-lg p-3">
+                                    <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                                      <RiskBadge level={item.riskLevel as RiskLevel} size="sm" />
+                                      {item.keywords.slice(0, 3).map(k => (
+                                        <span key={k} className="chip bg-white text-deepsea-700 border border-deepsea-100 text-[11px]">
+                                          #{k}
+                                        </span>
+                                      ))}
+                                      <span className="text-[10px] text-slate-500 font-mono ml-auto">{item.clueId}</span>
+                                    </div>
+                                    <p className="text-xs leading-relaxed text-deepsea-700 pl-5 relative">
+                                      <span className="absolute left-0 top-0 text-[#E9B44C] font-bold">→</span>
+                                      {item.instruction}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {rec.remark && (
+                            <p className="text-[11px] leading-relaxed text-deepsea-600 bg-white/70 rounded-lg px-3 py-2 border border-deepsea-100/60">
+                              💬 {rec.remark}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
@@ -485,7 +629,7 @@ export default function HandoverPage() {
   );
 }
 
-function UserIcon({ letter }: { letter: string }) {
+function AvatarLetter({ letter }: { letter: string }) {
   const colors = [
     'from-[#1B9AAA] to-deepsea-600',
     'from-[#E9B44C] to-[#b8862d]',

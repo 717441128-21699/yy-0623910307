@@ -4,7 +4,8 @@ import RiskBadge from './RiskBadge';
 import EmotionIcon from './EmotionIcon';
 import PlatformLogo from './PlatformLogo';
 import { cn } from '@/lib/utils';
-import { Zap, Clock, Layers, ChevronRight } from 'lucide-react';
+import { Zap, Clock, Layers, ChevronRight, AlertCircle } from 'lucide-react';
+import { REASON_NAMES, RISK_NAMES } from '@/types';
 
 interface ClueCardProps {
   clue: Clue;
@@ -93,6 +94,26 @@ export default function ClueCard({ clue, onClick, className, style, index }: Clu
           <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
         </span>
       </div>
+
+      {clue.adjustHistory && clue.adjustHistory.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-deepsea-100/70">
+          <div className="flex items-start gap-2">
+            <AlertCircle size={13} className="text-[#FF6B35] mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] text-slate-500 mb-0.5">
+                最近研判：<span className="font-semibold text-slate-600">{RISK_NAMES[clue.adjustHistory[clue.adjustHistory.length - 1].toLevel]}</span>
+                <span className="mx-1 text-slate-300">·</span>
+                <span className="text-deepsea-700">{REASON_NAMES[clue.adjustHistory[clue.adjustHistory.length - 1].reason] || clue.adjustHistory[clue.adjustHistory.length - 1].reason}</span>
+              </div>
+              {clue.adjustHistory[clue.adjustHistory.length - 1].judgment && (
+                <p className="text-[11px] leading-relaxed text-slate-600 line-clamp-2">
+                  {clue.adjustHistory[clue.adjustHistory.length - 1].judgment}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

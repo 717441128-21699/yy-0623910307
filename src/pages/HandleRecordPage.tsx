@@ -17,6 +17,8 @@ import {
   Eye,
   AlertTriangle,
   AlertOctagon,
+  X,
+  FileText,
 } from 'lucide-react';
 import { useHandleStore } from '@/store/handleStore';
 import { useClueStore } from '@/store/clueStore';
@@ -86,6 +88,18 @@ export default function HandleRecordPage() {
   const [showUnitForm, setShowUnitForm] = useState(false);
   const [showRespForm, setShowRespForm] = useState(false);
   const [showVerifyForm, setShowVerifyForm] = useState(false);
+  const [showAdvanceModal, setShowAdvanceModal] = useState(false);
+  const [pendingStage, setPendingStage] = useState<EventStage | null>(null);
+  const [stageNote, setStageNote] = useState('');
+
+  const stagePlaceholders: Record<EventStage, string> = {
+    found: '说明线索发现途径、初步判断等',
+    analyze: '说明研判结论、风险依据、涉及范围等',
+    contact: '说明联系了哪个单位、联系人是谁、对方反馈如何等',
+    respond: '说明回应发布到哪个平台、回应核心内容、审核情况等',
+    verify: '说明核验结果、群众反馈、后续跟进措施等',
+    closed: '说明最终处置结果、舆情整体评价等',
+  };
 
   const [unitForm, setUnitForm] = useState<Omit<ContactUnit, 'id'>>({ unitName: '', contactPerson: '', phone: '', result: '', status: 'pending' });
   const [respForm, setRespForm] = useState<Omit<ResponseRecord, 'id'>>({ platform: 'weibo', publishedAt: '', content: '', auditStatus: 'draft', views: 0 });
@@ -125,11 +139,35 @@ export default function HandleRecordPage() {
     setShowVerifyForm(false);
   };
 
-  const handleAdvanceStage = (s: EventStage) => {
+  const handleOpenAdvanceModal = (s: EventStage) => {
     if (!record) return;
-    setStage(id, s);
-    updateClueStage(id, s);
-    addTimelineEvent(id, { stage: s, title: `推进到阶段：${STAGE_NAMES[s]}`, detail: '值班员手动推进处置阶段', time: new Date().toISOString().slice(0, 16).replace('T', ' '), operator: '当前操作员' });
+    setPendingStage(s);
+    setStageNote('');
+    setShowAdvanceModal(true);
+  };
+
+  const handleConfirmAdvance = () => {
+    if (!record || !pendingStage) return;
+    setStage(id, pendingStage);
+    updateClueStage(id, pendingStage);
+    const stageTitleMap: Record<EventStage, string> = {
+      found: '线索发现',
+      analyze: '风险研判',
+      contact: '联系涉事方',
+      respond: '发布回应',
+      verify: '核实追踪',
+      closed: '处置闭环',
+    };
+    addTimelineEvent(id, {
+      stage: pendingStage,
+      title: `推进到阶段：${STAGE_NAMES[pendingStage]}`,
+      detail: stageNote || stageTitleMap[pendingStage] + '完成',
+      time: new Date().toISOString().slice(0, 16).replace('T', ' '),
+      operator: '当前操作员',
+    });
+    setShowAdvanceModal(false);
+    setPendingStage(null);
+    setStageNote('');
   };
 
   const handleSaveAll = () => {
@@ -442,7 +480,7 @@ export default function HandleRecordPage() {
                 <button
                   key={s.stage}
                   disabled={disabled}
-                  onClick={() => handleAdvanceStage(s.stage)}
+                  onClick={() => handleOpenAdvanceModal(s.stage)}
                   className={cn(
                     'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold border transition-all',
                     disabled
@@ -478,6 +516,66 @@ export default function HandleRecordPage() {
           </div>
         </div>
       </section>
+
+      {showAdvanceModal && pendingStage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-deepsea-900/40 backdrop-blur-sm animate-slide-up-in p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="px-6 py-4 bg-gradient-to-r from-deepsea-700 to-deepsea-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare size={18} />
+                <h3 className="text-base font-bold">阶段推进说明</h3>
+              </div>
+              <button
+                onClick={() => { setShowAdvanceModal(false); setPendingStage(null); setStageNote(''); }}
+                className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div>
+                <div className="text-xs text-slate-500 mb-1">将推进到阶段</div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-deepsea-600 to-[#1B9AAA] text-white text-sm font-bold shadow-md">
+                    <CheckCircle2 size={15} />
+                    {STAGE_NAMES[pendingStage]}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-deepsea-700 mb-2 flex items-center gap-1.5">
+                  <FileText size={13} />
+                  阶段说明
+                </label>
+                <textarea
+                  autoFocus
+                  value={stageNote}
+                  onChange={e => setStageNote(e.target.value)}
+                  rows={5}
+                  placeholder={stagePlaceholders[pendingStage]}
+                  className="w-full px-4 py-3 rounded-xl border border-deepsea-100 bg-deepsea-50/30 text-sm text-deepsea-900 placeholder:text-deepsea-300 focus:outline-none focus:ring-4 focus:ring-deepsea-100 focus:border-deepsea-300 focus:bg-white transition-all resize-none leading-relaxed"
+                />
+                <p className="text-[11px] text-slate-400 mt-2">说明将进入处置时间线，并在交接班未闭环清单中作为待办摘要展示</p>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  onClick={() => { setShowAdvanceModal(false); setPendingStage(null); setStageNote(''); }}
+                  className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm font-semibold transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleConfirmAdvance}
+                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-deepsea-700 via-deepsea-600 to-[#1B9AAA] text-white text-sm font-bold shadow-lg shadow-deepsea-600/25 hover:shadow-xl hover:shadow-deepsea-600/30 hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 size={15} />
+                  确认推进
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

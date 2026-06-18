@@ -56,7 +56,7 @@ interface ClueStore {
   setFilterPlatform: (v: string) => void;
   setFilterKeyword: (v: string) => void;
   setFilterTimeRange: (v: '1h' | '6h' | '24h') => void;
-  adjustRiskLevel: (clueId: string, toLevel: RiskLevel, reason: string, remark: string) => void;
+  adjustRiskLevel: (clueId: string, toLevel: RiskLevel, reason: string, remark: string, judgment?: string) => void;
   updateClueStage: (clueId: string, stage: string) => void;
   getFilteredClues: () => Clue[];
 }
@@ -105,13 +105,14 @@ export const useClueStore = create<ClueStore>((set, get) => ({
   setFilterKeyword: (v) => set({ filterKeyword: v }),
   setFilterTimeRange: (v) => set({ filterTimeRange: v }),
 
-  adjustRiskLevel: (clueId, toLevel, reason, remark) => {
+  adjustRiskLevel: (clueId, toLevel, reason, remark, judgment) => {
     const record: RiskAdjustRecord = {
       id: 'r' + Date.now(),
       fromLevel: get().getClueById(clueId)?.riskLevel || 'watch',
       toLevel,
       reason,
       remark,
+      judgment,
       operator: '当前操作员',
       time: new Date().toISOString().slice(0, 16).replace('T', ' '),
     };
