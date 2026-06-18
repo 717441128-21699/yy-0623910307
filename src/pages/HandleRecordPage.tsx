@@ -81,7 +81,7 @@ export default function HandleRecordPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const { fetchRecord, getRecord, saveRecord, setStage, addContactUnit, addResponse, addVerifyItem, addTimelineEvent } = useHandleStore();
-  const { getClueById } = useClueStore();
+  const { getClueById, updateClueStage } = useClueStore();
 
   const [showUnitForm, setShowUnitForm] = useState(false);
   const [showRespForm, setShowRespForm] = useState(false);
@@ -128,6 +128,7 @@ export default function HandleRecordPage() {
   const handleAdvanceStage = (s: EventStage) => {
     if (!record) return;
     setStage(id, s);
+    updateClueStage(id, s);
     addTimelineEvent(id, { stage: s, title: `推进到阶段：${STAGE_NAMES[s]}`, detail: '值班员手动推进处置阶段', time: new Date().toISOString().slice(0, 16).replace('T', ' '), operator: '当前操作员' });
   };
 

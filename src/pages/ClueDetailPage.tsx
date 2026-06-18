@@ -15,6 +15,7 @@ import {
   ArrowRight,
   Clock,
   User,
+  CheckCircle2,
 } from 'lucide-react';
 import { useClueStore } from '@/store/clueStore';
 import RiskBadge from '@/components/RiskBadge';
@@ -34,14 +35,16 @@ export default function ClueDetailPage() {
   const [targetLevel, setTargetLevel] = useState<RiskLevel | ''>('');
   const [reason, setReason] = useState('');
   const [remark, setRemark] = useState('');
+  const [adjustSuccess, setAdjustSuccess] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const clue = useMemo(() => getClueById(id), [id, getClueById]);
+  const clue = useMemo(() => getClueById(id), [id, getClueById, refreshKey]);
 
   useEffect(() => {
     if (clue) {
       setTargetLevel(clue.riskLevel);
     }
-  }, [clue?.id]);
+  }, [clue?.id, clue?.riskLevel]);
 
   if (!clue) {
     return (
@@ -65,13 +68,16 @@ export default function ClueDetailPage() {
     }
     adjustRiskLevel(clue.id, targetLevel, reason, remark);
     setRemark('');
-    alert('风险等级调整成功');
+    setReason('');
+    setAdjustSuccess(true);
+    setRefreshKey(k => k + 1);
+    setTimeout(() => setAdjustSuccess(false), 2500);
   };
 
   const levelBtns: { level: RiskLevel; icon: typeof Eye; label: string; cls: string }[] = [
     { level: 'watch', icon: Eye, label: '关注', cls: 'hover:border-[#1B9AAA] hover:bg-[#1B9AAA]/5 data-[active=true]:bg-[#1B9AAA] data-[active=true]:text-white data-[active=true]:border-[#1B9AAA]' },
     { level: 'warn', icon: AlertTriangle, label: '预警', cls: 'hover:border-[#FF6B35] hover:bg-[#FF6B35]/5 data-[active=true]:bg-[#FF6B35] data-[active=true]:text-white data-[active=true]:border-[#FF6B35]' },
-    { level: 'escalate', icon: AlertOctagon, label: '加急', cls: 'hover:border-[#D72638] hover:bg-[#D72638]/5 data-[active=true]:bg-[#D72638] data-[active=true]:text-white data-[active=true]:border-[#D72638]' },
+    { level: 'escalate', icon: AlertOctagon, label: '升级', cls: 'hover:border-[#D72638] hover:bg-[#D72638]/5 data-[active=true]:bg-[#D72638] data-[active=true]:text-white data-[active=true]:border-[#D72638]' },
   ];
 
   return (
@@ -224,9 +230,21 @@ export default function ClueDetailPage() {
               </div>
               <button
                 onClick={handleAdjust}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-deepsea-700 via-deepsea-600 to-deepsea-500 text-white text-sm font-bold shadow-lg shadow-deepsea-600/25 hover:shadow-xl hover:shadow-deepsea-600/30 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
+                className={cn(
+                  'w-full py-3 rounded-xl text-sm font-bold shadow-lg transition-all duration-200 flex items-center justify-center gap-2',
+                  adjustSuccess
+                    ? 'bg-emerald-500 text-white shadow-emerald-500/25'
+                    : 'bg-gradient-to-r from-deepsea-700 via-deepsea-600 to-deepsea-500 text-white shadow-deepsea-600/25 hover:shadow-xl hover:shadow-deepsea-600/30 hover:-translate-y-0.5 active:translate-y-0'
+                )}
               >
-                确认调整
+                {adjustSuccess ? (
+                  <>
+                    <CheckCircle2 size={16} />
+                    调整成功，已保存
+                  </>
+                ) : (
+                  '确认调整'
+                )}
               </button>
             </div>
 

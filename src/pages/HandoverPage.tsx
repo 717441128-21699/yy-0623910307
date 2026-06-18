@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -19,28 +19,85 @@ import {
   History,
 } from 'lucide-react';
 import * as api from '@/mock/api';
-import type { HandoverRecord, OpenClue, RiskLevel } from '@/types';
-import { RISK_NAMES, STAGE_NAMES } from '@/types';
+import type { HandoverRecord, RiskLevel } from '@/types';
+import { RISK_NAMES, STAGE_NAMES, type OpenClue } from '@/types';
 import { cn } from '@/lib/utils';
 import StatCard from '@/components/StatCard';
+import { useClueStore } from '@/store/clueStore';
+import { useHandleStore } from '@/store/handleStore';
+
+const HANDOVER_STORAGE_KEY = 'psy-handover-records';
+
+function loadHandoverHistory(): HandoverRecord[] {
+  try {
+    const raw = localStorage.getItem(HANDOVER_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return [];
+}
+
+function saveHandoverHistory(records: HandoverRecord[]) {
+  localStorage.setItem(HANDOVER_STORAGE_KEY, JSON.stringify(records));
+}
 
 export default function HandoverPage() {
   const navigate = useNavigate();
+  const { clues, fetchClues } = useClueStore();
+  const { records: handleRecords } = useHandleStore();
+
   const [history, setHistory] = useState<HandoverRecord[]>([]);
-  const [openClues, setOpenClues] = useState<OpenClue[]>([]);
   const [shiftStarter, setShiftStarter] = useState('');
   const [shiftEnder, setShiftEnder] = useState('');
   const [remark, setRemark] = useState('');
   const [nowTime, setNowTime] = useState(new Date());
+  const [confirmSuccess, setConfirmSuccess] = useState(false);
 
   useEffect(() => {
-    api.getRecentHandovers(3).then(setHistory);
-    Promise.resolve(api.MOCK_OPEN_CLUES).then(setOpenClues);
+    fetchClues();
+    const stored = loadHandoverHistory();
+    if (stored.length > 0) {
+      setHistory(stored);
+    } else {
+      api.getRecentHandovers(3).then(mockHistory => {
+        setHistory(mockHistory);
+        saveHandoverHistory(mockHistory);
+      });
+    }
     const t = setInterval(() => setNowTime(new Date()), 60000);
     return () => clearInterval(t);
-  }, []);
+  }, [fetchClues]);
 
-  const shiftStats = history[0] ?? { foundCount: 0, handledCount: 0, escalateCount: 0, avgResponseTime: 0 };
+  const unclosedClues = useMemo(() => {
+    const result: OpenClue[] = [];
+    for (const clue of clues) {
+      if (clue.isClosed) continue;
+      const hr = handleRecords[clue.id];
+      const stage = hr?.stage || clue.currentStage || 'found';
+      if (stage === 'closed') continue;
+      result.push({
+        id: clue.id,
+        riskLevel: clue.riskLevel,
+        keywords: clue.keywords,
+        foundAt: clue.publishedAt,
+        timeAgo: clue.timeAgo,
+        stage: stage as any,
+        todo: hr ? `处置阶段：${STAGE_NAMES[stage as any] || stage}，待继续推进` : '尚未启动处置流程',
+      });
+    }
+    return result;
+  }, [clues, handleRecords]);
+
+  const shiftStats = useMemo(() => {
+    const foundCount = clues.length;
+    const handledCount = clues.filter(c => c.isClosed || c.currentStage === 'closed').length;
+    const escalateCount = clues.filter(c => c.riskLevel === 'escalate').length;
+    return {
+      foundCount,
+      handledCount,
+      escalateCount,
+      avgResponseTime: history[0]?.avgResponseTime ?? 18,
+    };
+  }, [clues, history]);
 
   const riskColorBar: Record<RiskLevel, string> = {
     watch: 'bg-[#1B9AAA]',
@@ -59,10 +116,25 @@ export default function HandoverPage() {
       alert('请填写交班人和接班人签名');
       return;
     }
-    alert(`交接班确认成功！\n交班人：${shiftStarter}\n接班人：${shiftEnder}\n时间：${new Date().toLocaleString('zh-CN')}`);
+    const newRecord: HandoverRecord = {
+      id: 'H' + Date.now().toString().slice(-10),
+      shiftStarter: shiftStarter.trim(),
+      shiftEnder: shiftEnder.trim(),
+      handedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
+      foundCount: shiftStats.foundCount,
+      handledCount: shiftStats.handledCount,
+      escalateCount: shiftStats.escalateCount,
+      avgResponseTime: shiftStats.avgResponseTime,
+      remark: remark.trim(),
+    };
+    const updatedHistory = [newRecord, ...history].slice(0, 20);
+    saveHandoverHistory(updatedHistory);
+    setHistory(updatedHistory);
     setShiftStarter('');
     setShiftEnder('');
     setRemark('');
+    setConfirmSuccess(true);
+    setTimeout(() => setConfirmSuccess(false), 2500);
   };
 
   return (
@@ -138,7 +210,7 @@ export default function HandoverPage() {
               <AlertTriangle size={18} className="text-[#FF6B35]" />
               未闭环线索清单
               <span className="chip bg-[#FF6B35]/10 text-[#FF6B35] border border-[#FF6B35]/20">
-                {openClues.length} 条待跟进
+                {unclosedClues.length} 条待跟进
               </span>
             </h2>
             <p className="text-xs text-deepsea-500 mt-1 ml-7">
@@ -161,14 +233,14 @@ export default function HandoverPage() {
               </tr>
             </thead>
             <tbody>
-              {openClues.length === 0 ? (
+              {unclosedClues.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center py-12 text-deepsea-400">
                     🎉 太棒了！当前没有未闭环的线索
                   </td>
                 </tr>
               ) : (
-                openClues.map((clue, idx) => (
+                unclosedClues.map((clue, idx) => (
                   <tr
                     key={clue.id}
                     className={cn(
@@ -212,7 +284,7 @@ export default function HandoverPage() {
                     </td>
                     <td className="px-3 py-4 whitespace-nowrap">
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-deepsea-100/60 text-deepsea-800 text-xs font-semibold">
-                        {STAGE_NAMES[clue.stage]}
+                        {STAGE_NAMES[clue.stage] || clue.stage}
                       </span>
                     </td>
                     <td className="px-3 py-4 text-deepsea-700 max-w-[320px]">
@@ -298,10 +370,24 @@ export default function HandoverPage() {
 
           <button
             onClick={handleConfirmHandover}
-            className="w-full sm:w-auto sm:min-w-[220px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-br from-deepsea-600 via-deepsea-700 to-deepsea-800 text-white text-sm font-semibold shadow-lg shadow-deepsea-700/20 hover:shadow-xl hover:shadow-deepsea-700/30 hover:-translate-y-0.5 active:translate-y-0 transition-all"
+            className={cn(
+              'w-full sm:w-auto sm:min-w-[220px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold shadow-lg transition-all',
+              confirmSuccess
+                ? 'bg-emerald-500 text-white shadow-emerald-500/25'
+                : 'bg-gradient-to-br from-deepsea-600 via-deepsea-700 to-deepsea-800 text-white shadow-deepsea-700/20 hover:shadow-xl hover:shadow-deepsea-700/30 hover:-translate-y-0.5 active:translate-y-0'
+            )}
           >
-            <Save size={16} />
-            确认交接班
+            {confirmSuccess ? (
+              <>
+                <CheckCircle2 size={16} />
+                交接班确认成功
+              </>
+            ) : (
+              <>
+                <Save size={16} />
+                确认交接班
+              </>
+            )}
           </button>
         </div>
 
@@ -321,7 +407,7 @@ export default function HandoverPage() {
                   暂无历史记录
                 </div>
               ) : (
-                history.map((rec, idx) => (
+                history.slice(0, 3).map((rec, idx) => (
                   <div
                     key={rec.id}
                     className={cn(

@@ -123,7 +123,7 @@ export default function DashboardPage() {
           trendLabel="较昨日同期"
         />
         <StatCard
-          title="加急数"
+          title="升级数"
           value={stats?.escalateCount ?? 0}
           icon={<AlertOctagon size={22} />}
           iconBg="bg-[#D72638]/10"

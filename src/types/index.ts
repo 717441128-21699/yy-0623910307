@@ -9,7 +9,7 @@ export type EventStage = 'found' | 'analyze' | 'contact' | 'respond' | 'verify' 
 export const RISK_NAMES: Record<RiskLevel, string> = {
   watch: '关注',
   warn: '预警',
-  escalate: '加急',
+  escalate: '升级',
 };
 
 export const PLATFORM_NAMES: Record<PlatformType, string> = {
@@ -31,14 +31,14 @@ export const STAGE_NAMES: Record<EventStage, string> = {
 };
 
 export const REASON_NAMES: Record<string, string> = {
-  spread_fast: '传播速度过快',
-  emotion_negative: '负面情绪集中',
-  influence_wide: '影响范围扩大',
-  hot_topic: '登上热搜榜',
-  official_attention: '官方关注介入',
-  media_report: '多家媒体报道',
-  user_follow: '用户持续关注',
-  content_sensitive: '涉及敏感内容',
+  policy_misread: '政策误读',
+  official_speech: '干部言论',
+  collective_demand: '群体性诉求',
+  rumor_spread: '谣言传播',
+  media_report: '媒体报道',
+  cross_region: '跨区传播',
+  sensitive_anniversary: '敏感节点',
+  other: '其他',
 };
 
 export interface TrendPoint {

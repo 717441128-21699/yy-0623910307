@@ -43,8 +43,8 @@ function makeSpreadNodes(): SpreadNode[] {
 
 function makeAdjustHistory(): RiskAdjustRecord[] {
   return [
-    { id: 'r1', fromLevel: 'watch', toLevel: 'warn', reason: 'spread_fast', remark: '转发量在1小时内翻3倍，需密切关注', operator: '张磊', time: hoursAgo(2).slice(0, 16).replace('T', ' ') },
-    { id: 'r2', fromLevel: 'warn', toLevel: 'escalate', reason: 'hot_topic', remark: '登上本地热搜榜第5位', operator: '李明', time: hoursAgo(0.8).slice(0, 16).replace('T', ' ') },
+    { id: 'r1', fromLevel: 'watch', toLevel: 'warn', reason: 'policy_misread', remark: '转发量在1小时内翻3倍，需密切关注', operator: '张磊', time: hoursAgo(2).slice(0, 16).replace('T', ' ') },
+    { id: 'r2', fromLevel: 'warn', toLevel: 'escalate', reason: 'collective_demand', remark: '登上本地热搜榜第5位', operator: '李明', time: hoursAgo(0.8).slice(0, 16).replace('T', ' ') },
   ];
 }
 
